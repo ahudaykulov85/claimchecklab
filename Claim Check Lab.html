@@ -1,0 +1,745 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body><title>Claim Check Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: researcher control strip on top, a phone-sized shop chat in the centre (after Li & Li 2026 stimuli), response panel docked under the chat. */
+:root {
+  --bg: #eef1ee;
+  --surface: #ffffff;
+  --phone: #f7f8f7;
+  --ink: #1d2420;
+  --muted: #5f6b64;
+  --line: #d6ddd8;
+  --accent: #1f6b55;
+  --accent-ink: #ffffff;
+  --bubble-ai: #e6e9e7;
+  --bubble-user: #8ccbea;
+  --bubble-user-ink: #0f2a38;
+  --ok: #1e7a46;
+  --ok-bg: #e2f3e8;
+  --bad: #b23a2f;
+  --bad-bg: #fae6e3;
+  --strip: #1d2420;
+  --strip-ink: #e8eee9;
+  --font-body: "Noto Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121614; --surface: #1b211e; --phone: #161b18; --ink: #e5ebe7; --muted: #9aa8a0; --line: #2f3833;
+    --accent: #5cc29b; --accent-ink: #0d1512; --bubble-ai: #262e2a; --bubble-user: #2c5e78; --bubble-user-ink: #e6f4fb;
+    --ok: #6fd39b; --ok-bg: #173323; --bad: #f08a7e; --bad-bg: #3a1d19; --strip: #0b0e0c; --strip-ink: #dfe7e2;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121614; --surface: #1b211e; --phone: #161b18; --ink: #e5ebe7; --muted: #9aa8a0; --line: #2f3833;
+  --accent: #5cc29b; --accent-ink: #0d1512; --bubble-ai: #262e2a; --bubble-user: #2c5e78; --bubble-user-ink: #e6f4fb;
+  --ok: #6fd39b; --ok-bg: #173323; --bad: #f08a7e; --bad-bg: #3a1d19; --strip: #0b0e0c; --strip-ink: #dfe7e2;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.strip { background: var(--strip); color: var(--strip-ink); padding-block: 8px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); font-family: var(--font-mono); font-size: 12px; }
+.strip-in { max-width: 980px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.strip label { display: flex; gap: 6px; align-items: center; }
+.strip select, .strip button { background: transparent; border: 1px solid #56625b; border-radius: 4px; padding: 3px 6px; color: var(--strip-ink); }
+.strip select option { color: #1d2420; }
+.strip .tag { letter-spacing: .06em; text-transform: uppercase; opacity: .75; }
+.strip .cond { margin-left: auto; padding: 2px 8px; border-radius: 3px; background: #2c3631; }
+
+.wrap { padding-block: 20px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.page { max-width: 420px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+.card h1 { font-size: 21px; line-height: 1.25; margin: 0; text-wrap: balance; }
+.card h2 { font-size: 16px; margin: 0; }
+.card p { margin: 0; }
+.muted { color: var(--muted); font-size: 13px; }
+.btn { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 10px; padding: 11px 16px; font-weight: 600; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field input[type=text] { border: 1px solid var(--line); background: var(--phone); border-radius: 8px; padding: 9px 10px; }
+.check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; }
+
+/* phone chat */
+.phone { background: var(--phone); border: 1px solid var(--line); border-radius: 22px; overflow: hidden; display: flex; flex-direction: column; }
+.ph-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.ph-head .back { font-size: 18px; color: var(--muted); }
+.ph-head .ttl { font-weight: 600; font-size: 14px; }
+.ph-head .sub { font-size: 11px; color: var(--muted); }
+.ph-head .prog { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.chat { padding: 14px 12px; display: flex; flex-direction: column; gap: 10px; min-height: 340px; }
+.msg { max-width: 86%; padding: 9px 12px; border-radius: 14px; font-size: 14px; animation: rise .25s ease-out both; }
+.msg.ai { background: var(--bubble-ai); align-self: flex-start; border-bottom-left-radius: 4px; }
+.msg.user { background: var(--bubble-user); color: var(--bubble-user-ink); align-self: flex-end; border-bottom-right-radius: 4px; }
+.who { font-size: 11px; color: var(--muted); margin: 2px 4px -6px; }
+@keyframes rise { from { transform: translateY(6px); opacity: .2; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .msg, .pcard, .verdict { animation: none !important; } }
+
+.pcard { align-self: flex-start; width: 92%; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; grid-template-columns: 64px 1fr; gap: 10px 12px; animation: rise .25s ease-out both; }
+.pcard .ico { width: 64px; height: 64px; border-radius: 10px; display: grid; place-items: center; }
+.pcard .ico svg { width: 40px; height: 40px; }
+.pcard .meta { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pcard .brand { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.pcard .name { font-weight: 600; font-size: 14px; }
+.pcard .price { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pcard .claim { grid-column: 1 / -1; font-style: italic; font-size: 15px; }
+.pcard .seal { display: inline-block; font-style: normal; font-size: 12px; font-weight: 600; border: 1.5px solid currentColor; border-radius: 999px; padding: 1px 9px; color: var(--accent); }
+.pcard ul { grid-column: 1 / -1; margin: 0; padding-left: 18px; font-size: 13px; color: var(--muted); }
+
+.verdict { align-self: flex-start; width: 92%; border-radius: 12px; padding: 11px 12px; display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--line); background: var(--surface); animation: rise .25s ease-out both; }
+.verdict .vh { display: flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-family: var(--font-mono); }
+.verdict .badge { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 14px; padding: 4px 10px; border-radius: 999px; align-self: flex-start; }
+.badge.ok { background: var(--ok-bg); color: var(--ok); }
+.badge.bad { background: var(--bad-bg); color: var(--bad); }
+.verdict .conf { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.verdict dl { margin: 2px 0 0; display: grid; grid-template-columns: 1fr; gap: 4px; font-size: 13px; }
+.verdict dt { font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+.verdict dd { margin: 0 0 4px; }
+
+.ph-foot { border-top: 1px solid var(--line); background: var(--surface); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.q { font-weight: 600; font-size: 14px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.opt { border: 1.5px solid var(--line); background: var(--phone); border-radius: 10px; padding: 10px 8px; font-weight: 600; font-size: 14px; }
+.opt[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.scale { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.scale.s7 { grid-template-columns: repeat(7, 1fr); }
+.scale.s10 { grid-template-columns: repeat(10, 1fr); }
+.scale button { border: 1.5px solid var(--line); background: var(--phone); border-radius: 8px; padding: 7px 0; font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+.scale button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+
+.item { display: flex; flex-direction: column; gap: 8px; padding-block: 10px; border-top: 1px solid var(--line); }
+.item:first-of-type { border-top: 0; }
+.choice-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.choice-grid .pcard { width: 100%; cursor: pointer; }
+.choice-grid .pcard[aria-pressed="true"] { outline: 2.5px solid var(--accent); }
+.none { border: 1.5px dashed var(--line); border-radius: 12px; padding: 12px; background: transparent; font-weight: 600; }
+.none[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+
+.tbl-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th, td { text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; font-weight: 600; }
+td.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
+.pill { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; }
+.pill.ok { background: var(--ok-bg); color: var(--ok); }
+.pill.bad { background: var(--bad-bg); color: var(--bad); }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stat { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.stat b { display: block; font-family: var(--font-mono); font-size: 18px; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 11px; color: var(--muted); }
+textarea.dump { width: 100%; min-height: 120px; font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--phone); padding: 8px; }
+.note { font-size: 12px; color: var(--muted); border-left: 3px solid var(--line); padding-left: 10px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+</style>
+
+<div class="strip" id="strip">
+  <div class="strip-in">
+    <span class="tag">Researcher preview</span>
+    <label for="selGroup">Group
+      <select id="selGroup">
+        <option value="G0">G0 no tool</option>
+        <option value="G1">G1 accurate · score</option>
+        <option value="G2">G2 accurate · evidence</option>
+        <option value="G3">G3 fallible · score</option>
+        <option value="G4">G4 fallible · evidence</option>
+      </select>
+    </label>
+    <label for="selList">Error list
+      <select id="selList"><option value="A">A</option><option value="B">B</option></select>
+    </label>
+    <button id="btnRestart" type="button">Restart with these settings</button>
+    <span class="cond" id="condChip">G0 · A</span>
+  </div>
+</div>
+
+<main class="wrap"><div class="page" id="app"></div></main>
+
+<script>
+/* ===================== CONFIG ===================== */
+const CONFIG = {
+  /* Paste your Google Apps Script web app URL (ends in /exec) between the quotes. */
+  endpoint: "https://script.google.com/macros/s/AKfycbxZEPMTCmY9fqPv-_Ko1HSoi7Dd9xXL1v06Ow0Db36sVZSreMaqXQMvRKDoKrtJjDCe/exec",
+  bonusPerCorrect: 500,     // so'm per correct judgment [INPUT NEEDED]
+  feedbackDelay: 450        // ms between chat messages
+};
+/* Participant mode runs whenever an endpoint is set. Add ?preview=1 to the link to see the researcher strip. */
+const PARAMS = (() => { try { return new URLSearchParams(location.search); } catch { return new URLSearchParams(""); } })();
+CONFIG.preview = !CONFIG.endpoint || PARAMS.has("preview");
+const GROUPS = {
+  G0: { ai: false, acc: null, fmt: null, label: "No tool" },
+  G1: { ai: true, acc: "accurate", fmt: "score", label: "Accurate AI, score-only" },
+  G2: { ai: true, acc: "accurate", fmt: "evidence", label: "Accurate AI, evidence-traceable" },
+  G3: { ai: true, acc: "fallible", fmt: "score", label: "Fallible AI (75%), score-only" },
+  G4: { ai: true, acc: "fallible", fmt: "evidence", label: "Fallible AI (75%), evidence-traceable" }
+};
+/* Error items per counterbalanced list: 4 misleading approved + 4 substantive flagged = 8 of 32 (75% accuracy). */
+const ERRORS = {
+  A: ["V1", "V2", "O1", "O2", "S1", "S2", "S3", "S4"],
+  B: ["V3", "V4", "O3", "O4", "S5", "S6", "S7", "S8"]
+};
+
+/* ===================== STIMULI =====================
+   Illustrative drafts for expert coding and pretesting. Brands are fictitious.
+   type: S substantive | V vague/generic | P partial scope | L uncertified label | O offset-based neutrality
+   ok = explanation when the verifier is right; err = explanation shown on an error trial (written to be checkable). */
+const ICONS = {
+  bottle: '<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h8v6l3 4v20a2 2 0 0 1-2 2H15a2 2 0 0 1-2-2V14l3-4z"/><path d="M13 20h14"/></svg>',
+  box: '<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 14l14-7 14 7v14l-14 7-14-7z"/><path d="M6 14l14 7 14-7M20 21v14"/></svg>',
+  shirt: '<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 6l-8 5 3 7 4-2v18h14V16l4 2 3-7-8-5c-1 3-3 4-6 4s-5-1-6-4z"/></svg>',
+  bulb: '<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 5a10 10 0 0 0-6 18v5h12v-5A10 10 0 0 0 20 5z"/><path d="M15 32h10M17 36h6"/></svg>',
+  appliance: '<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="5" width="24" height="30" rx="2"/><path d="M8 15h24M13 9v3M13 19v6"/></svg>',
+  cup: '<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 10h22l-3 24H12z"/><path d="M8 10h24"/></svg>',
+  bag: '<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 13h22l-2 22H11z"/><path d="M15 13v-3a5 5 0 0 1 10 0v3"/></svg>',
+  brush: '<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 32L26 14"/><path d="M24 8l8 8-4 4-8-8z"/></svg>'
+};
+const TINT = { bottle: "#d9ece6", box: "#ece4d3", shirt: "#dfe4f1", bulb: "#f1ead0", appliance: "#e3e7ea", cup: "#efe0d8", bag: "#e2e6dc", brush: "#e6e0ee" };
+const R_GEN = "Generic environmental claims need evidence of recognised excellent environmental performance.";
+const R_PART = "A claim about the whole product cannot rest on one part of it.";
+const R_LABEL = "Sustainability labels must come from a certification scheme or a public authority.";
+const R_OFF = "Neutral or reduced-impact claims based on offsetting are not accepted.";
+const R_CERT = "Claims backed by a recognised certification scheme are acceptable.";
+const R_SPEC = "Specific, measurable claims that state their scope are acceptable.";
+
+const ITEMS = [
+  // ---------- substantive ----------
+  { id: "S1", type: "S", product: "Laundry detergent", brand: "Toza", icon: "bottle", price: 38000, claim: "Refill pouch: 70% less plastic",
+    details: ["Refill pouch uses 70% less plastic than our 1-litre bottle.", "Pouch 21 g, bottle 70 g."],
+    ok: { ev: "Pack weights on the label: pouch 21 g, bottle 70 g.", rule: "Comparisons are acceptable when the basis of comparison is stated and accurate." },
+    err: { ev: "The comparison is with the brand's own bottle, not with other brands.", rule: "Comparisons must be fair and meaningful." } },
+  { id: "S2", type: "S", product: "Facial tissues", brand: "Musaffo", icon: "box", price: 14000, claim: "100% recycled paper fibre",
+    details: ["Made from 100% recycled paper fibre.", "FSC Recycled certified, licence code on pack."],
+    ok: { ev: "FSC Recycled certification covers the paper fibre.", rule: R_CERT },
+    err: { ev: "Recycled fibre is bleached during processing.", rule: "Claims must not hide important information." } },
+  { id: "S3", type: "S", product: "Shampoo", brand: "Bahor", icon: "bottle", price: 42000, claim: "Bottle made from 100% recycled plastic",
+    details: ["Bottle body made from 100% recycled PET.", "Cap and pump are not included in this figure."],
+    ok: { ev: "The label names which parts the figure covers.", rule: R_SPEC },
+    err: { ev: "Cap and pump are made from new plastic.", rule: "A claim about the whole product needs evidence for the whole product." } },
+  { id: "S4", type: "S", product: "LED bulb", brand: "Nurli", icon: "bulb", price: 22000, claim: "Uses 8.5 W instead of 60 W",
+    details: ["Same light (806 lumens) as a 60 W incandescent bulb.", "About 85% less electricity."],
+    ok: { ev: "Rated power and light output are printed on the pack.", rule: R_SPEC },
+    err: { ev: "The bulb contains electronics that are hard to recycle.", rule: "Claims must consider the full life cycle." } },
+  { id: "S5", type: "S", product: "Refrigerator", brand: "Sof", icon: "appliance", price: 6400000, claim: "Energy class A, 110 kWh per year",
+    details: ["Rated class A on the official energy label.", "Annual use 110 kWh."],
+    ok: { ev: "Official energy label data match the claim.", rule: "Claims based on an official label are acceptable." },
+    err: { ev: "The refrigerant type is not stated in the claim.", rule: "Claims must not omit important information." } },
+  { id: "S6", type: "S", product: "Cotton T-shirt", brand: "Ipak", icon: "shirt", price: 95000, claim: "100% organic cotton, GOTS certified",
+    details: ["Fabric made from 100% organic cotton.", "Certified to the Global Organic Textile Standard (GOTS)."],
+    ok: { ev: "A GOTS certificate number is listed for the fabric.", rule: R_CERT },
+    err: { ev: "The dyes used are synthetic.", rule: "Claims must consider the full life cycle." } },
+  { id: "S7", type: "S", product: "Bottled water", brand: "Chinor", icon: "bottle", price: 4500, claim: "Bottle made from 30% recycled plastic",
+    details: ["Bottle contains 30% recycled PET.", "Cap made from new plastic."],
+    ok: { ev: "The recycled share and the excluded part are stated on the label.", rule: R_SPEC },
+    err: { ev: "70% of the bottle is new plastic.", rule: "Claims must not hide important information." } },
+  { id: "S8", type: "S", product: "Dish soap", brand: "Oydin", icon: "bottle", price: 19000, claim: "EU Ecolabel certified",
+    details: ["Carries the EU Ecolabel.", "Licence number printed on the back label."],
+    ok: { ev: "The licence number appears in the EU Ecolabel register.", rule: R_CERT },
+    err: { ev: "The product is sold in a plastic bottle.", rule: "Certified products must have low impact across the life cycle." } },
+  { id: "S9", type: "S", product: "Ground coffee", brand: "Tong", icon: "cup", price: 68000, claim: "Rainforest Alliance certified farms",
+    details: ["Beans grown on Rainforest Alliance certified farms.", "Certificate shown on the pack."],
+    ok: { ev: "The certificate covers the farms that supply the beans.", rule: R_CERT } },
+  { id: "S10", type: "S", product: "Washing machine", brand: "Lola", icon: "appliance", price: 4800000, claim: "45 litres of water per 7 kg wash",
+    details: ["Uses 45 litres per standard 7 kg cycle.", "30% less water than our previous model."],
+    ok: { ev: "Water use per cycle is listed on the product label.", rule: R_SPEC } },
+  { id: "S11", type: "S", product: "Rubbish bags", brand: "Saodat", icon: "bag", price: 16000, claim: "Made from 80% recycled plastic",
+    details: ["Bags made from 80% recycled polyethylene.", "Tested by an independent laboratory."],
+    ok: { ev: "An independent laboratory report confirms the recycled share.", rule: R_SPEC } },
+  { id: "S12", type: "S", product: "Toothbrush", brand: "Zumrad", icon: "brush", price: 12000, claim: "Bamboo handle",
+    details: ["Handle made from bamboo.", "Bristles are nylon and do not biodegrade."],
+    ok: { ev: "The claim is limited to the handle and names the bristle material.", rule: R_SPEC } },
+  { id: "S13", type: "S", product: "Yogurt", brand: "Qaymoq", icon: "cup", price: 9000, claim: "Paper cup, recyclable with paper",
+    details: ["Cup made from paper card.", "Remove the plastic lid before recycling."],
+    ok: { ev: "The claim covers the cup and tells you how to recycle it.", rule: R_SPEC } },
+  { id: "S14", type: "S", product: "Air conditioner", brand: "Shamol", icon: "appliance", price: 5900000, claim: "Inverter: 30% less electricity",
+    details: ["Uses 30% less electricity per year than our fixed-speed model of the same capacity.", "Tested to ISO 5151."],
+    ok: { ev: "The test standard and the comparison model are named.", rule: R_SPEC } },
+  { id: "S15", type: "S", product: "Sunflower oil", brand: "Kungaboqar", icon: "bottle", price: 27000, claim: "25% lighter bottle",
+    details: ["New bottle uses 9 g less plastic.", "25% lighter than our previous bottle."],
+    ok: { ev: "Old and new bottle weights are stated.", rule: R_SPEC } },
+  { id: "S16", type: "S", product: "Paper towels", brand: "Oqtong", icon: "box", price: 18000, claim: "Processed chlorine-free, certified",
+    details: ["No chlorine used in bleaching.", "Certified by the Chlorine Free Products Association."],
+    ok: { ev: "The certifier is named on the pack.", rule: R_CERT } },
+  // ---------- vague / generic ----------
+  { id: "V1", type: "V", product: "Laundry detergent", brand: "Musaffo", icon: "bottle", price: 38000, claim: "Eco-friendly formula that cares for the planet",
+    details: ["Gentle on clothes.", "Fresh plant-based scent."],
+    ok: { ev: "No specific environmental benefit or evidence is given.", rule: R_GEN },
+    err: { ev: "The formula contains a plant-based fragrance.", rule: "Plant-based ingredients support an eco-friendly claim." } },
+  { id: "V2", type: "V", product: "Shampoo", brand: "Lola", icon: "bottle", price: 42000, claim: "Naturally green. Good for you and for nature.",
+    details: ["With herbal extracts.", "Gentle daily formula."],
+    ok: { ev: "Herbal extracts do not show an environmental benefit.", rule: R_GEN },
+    err: { ev: "The shampoo contains herbal extracts.", rule: "Natural ingredients support a green claim." } },
+  { id: "V3", type: "V", product: "Bottled water", brand: "Sof", icon: "bottle", price: 4500, claim: "The sustainable choice for a better tomorrow",
+    details: ["From mountain springs.", "Bottled at source."],
+    ok: { ev: "No specific environmental benefit or evidence is given.", rule: R_GEN },
+    err: { ev: "The water is bottled at source.", rule: "Local bottling supports a sustainability claim." } },
+  { id: "V4", type: "V", product: "Cotton T-shirt", brand: "Bahor", icon: "shirt", price: 95000, claim: "Conscious fashion that respects the Earth",
+    details: ["Soft cotton blend.", "Made in Uzbekistan."],
+    ok: { ev: "Local production alone does not show an environmental benefit.", rule: R_GEN },
+    err: { ev: "The product is made locally.", rule: "Local production supports an environmental claim." } },
+  // ---------- partial scope ----------
+  { id: "P1", type: "P", product: "Facial tissues", brand: "Oydin", icon: "box", price: 14000, claim: "A fully sustainable tissue",
+    details: ["Box made from recyclable cardboard.", "Soft 3-ply tissue."],
+    ok: { ev: "The evidence covers only the cardboard box, not the tissue.", rule: R_PART } },
+  { id: "P2", type: "P", product: "Dish soap", brand: "Toza", icon: "bottle", price: 19000, claim: "A green product, inside and out",
+    details: ["Bottle cap made from recycled plastic.", "Lemon scent."],
+    ok: { ev: "The evidence covers only the cap.", rule: R_PART } },
+  { id: "P3", type: "P", product: "Jeans", brand: "Ipak", icon: "shirt", price: 260000, claim: "Environmentally friendly jeans",
+    details: ["Swing tag printed on recycled paper.", "Classic straight fit."],
+    ok: { ev: "The evidence covers only the paper tag.", rule: R_PART } },
+  { id: "P4", type: "P", product: "Coffee capsules", brand: "Tong", icon: "cup", price: 85000, claim: "Eco capsules",
+    details: ["Outer box is recyclable.", "Capsules made from aluminium and plastic."],
+    ok: { ev: "The evidence covers only the outer box, not the capsules.", rule: R_PART } },
+  // ---------- uncertified label ----------
+  { id: "L1", type: "L", product: "Washing powder", brand: "Nurli", icon: "box", price: 33000, claim: "GreenLeaf Approved", seal: true,
+    details: ["Awarded the GreenLeaf seal.", "Concentrated formula."],
+    ok: { ev: "No certification scheme or public authority stands behind the GreenLeaf seal.", rule: R_LABEL } },
+  { id: "L2", type: "L", product: "Shampoo", brand: "Chinor", icon: "bottle", price: 42000, claim: "Planet Safe", seal: true,
+    details: ["Carries the Planet Safe seal.", "For all hair types."],
+    ok: { ev: "The Planet Safe seal was created by the brand itself.", rule: R_LABEL } },
+  { id: "L3", type: "L", product: "Paper towels", brand: "Saodat", icon: "box", price: 18000, claim: "Nature Certified", seal: true,
+    details: ["Nature Certified seal on the pack.", "Extra absorbent."],
+    ok: { ev: "No certifying body is named for the Nature Certified seal.", rule: R_LABEL } },
+  { id: "L4", type: "L", product: "LED bulb", brand: "Shamol", icon: "bulb", price: 22000, claim: "Eco Seal 100%", seal: true,
+    details: ["Eco Seal 100% on the pack.", "Warm white light."],
+    ok: { ev: "No certification scheme or public authority stands behind the Eco Seal.", rule: R_LABEL } },
+  // ---------- offset-based neutrality ----------
+  { id: "O1", type: "O", product: "Bottled water", brand: "Musaffo", icon: "bottle", price: 4500, claim: "Carbon neutral water",
+    details: ["Emissions balanced through forest projects."],
+    ok: { ev: "Neutrality comes from offsetting, not from lower emissions.", rule: R_OFF },
+    err: { ev: "The company funds verified forest projects.", rule: "Verified offsets support a carbon-neutral claim." } },
+  { id: "O2", type: "O", product: "Ground coffee", brand: "Zarafshon", icon: "cup", price: 68000, claim: "CO₂-neutral coffee",
+    details: ["We offset our emissions by supporting tree planting."],
+    ok: { ev: "Neutrality comes from tree-planting offsets.", rule: R_OFF },
+    err: { ev: "The company supports tree-planting projects.", rule: "Tree planting supports a CO₂-neutral claim." } },
+  { id: "O3", type: "O", product: "Cotton T-shirt", brand: "Chinor", icon: "shirt", price: 95000, claim: "Climate-positive T-shirt",
+    details: ["We compensate twice our emissions through certified offsets."],
+    ok: { ev: "The climate-positive claim rests on offsets.", rule: R_OFF },
+    err: { ev: "Offsets used are certified.", rule: "Certified offsets support a climate-positive claim." } },
+  { id: "O4", type: "O", product: "Yogurt", brand: "Sut", icon: "cup", price: 9000, claim: "Zero-emission yogurt",
+    details: ["Remaining emissions offset through partner projects."],
+    ok: { ev: "Zero emissions are reached only through offsetting.", rule: R_OFF },
+    err: { ev: "Partner projects balance remaining emissions.", rule: "Balanced emissions support a zero-emission claim." } }
+];
+const PRACTICE = [
+  { id: "X1", type: "S", product: "Orange juice", brand: "Bahor", icon: "box", price: 21000, claim: "Carton made from 75% FSC-certified paperboard",
+    details: ["Paperboard share stated on the carton.", "FSC licence code printed."], ok: { ev: "The FSC licence covers the paperboard.", rule: R_CERT } },
+  { id: "X2", type: "V", product: "Apple juice", brand: "Sof", icon: "box", price: 21000, claim: "Nature's best for a greener world",
+    details: ["100% apple juice.", "No added sugar."], ok: { ev: "No specific environmental benefit or evidence is given.", rule: R_GEN } }
+];
+/* Choice task: shown without AI. Two options at the same price, or neither. */
+const CHOICES = [
+  { id: "C1", a: "S1", b: "V1" }, { id: "C2", a: "S7", b: "O1" }, { id: "C3", a: "S6", b: "V4" },
+  { id: "C4", a: "S2", b: "P1" }, { id: "C5", a: "V2", b: "L2" }, { id: "C6", a: "O2", b: "P4" }
+];
+const TYPE_NAME = { S: "Substantive", V: "Vague or generic", P: "Partial scope", L: "Uncertified label", O: "Offset-based neutrality" };
+const byId = Object.fromEntries([...ITEMS, ...PRACTICE].map(i => [i.id, i]));
+
+/* ===================== HELPERS ===================== */
+const $app = document.getElementById("app");
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const som = n => n.toLocaleString("en-US").replace(/,/g, " ") + " so'm";
+const sleep = ms => new Promise(r => setTimeout(r, matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : ms));
+function rng(seed) { let s = seed >>> 0; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function shuffle(arr, r) { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function hash(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+/* Inverse normal CDF (Acklam) for d′ and c */
+function qnorm(p) {
+  const a = [-39.69683028665376, 220.9460984245205, -275.9285104469687, 138.357751867269, -30.66479806614716, 2.506628277459239];
+  const b = [-54.47609879822406, 161.5858368580409, -155.6989798598866, 66.80131188771972, -13.28068155288572];
+  const c = [-0.007784894002430293, -0.3223964580411365, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783];
+  const d = [0.007784695709041462, 0.3224671290700398, 2.445134137142996, 3.754408661907416];
+  const pl = 0.02425;
+  if (p < pl) { const q = Math.sqrt(-2 * Math.log(p)); return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+  if (p > 1 - pl) { const q = Math.sqrt(-2 * Math.log(1 - p)); return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+  const q = p - 0.5, r = q * q;
+  return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+}
+
+/* ===================== STATE ===================== */
+let S;
+function newSession(group, list) {
+  const pid = "P" + Date.now().toString(36).toUpperCase() + Math.floor(Math.random() * 1e4);
+  if (!CONFIG.preview && !(GROUPS[group] && ERRORS[list])) {
+    group = Object.keys(GROUPS)[Math.floor(Math.random() * 5)];
+    list = Math.random() < 0.5 ? "A" : "B";
+  }
+  const r = rng(hash(pid));
+  S = {
+    pid, code: "", group, list, cond: GROUPS[group], started: new Date().toISOString(),
+    order: shuffle(ITEMS.map(i => i.id), r), choiceOrder: shuffle(CHOICES.map(c => c.id), r),
+    sides: Object.fromEntries(CHOICES.map(c => [c.id, r() < 0.5])),
+    conf: Object.fromEntries(ITEMS.concat(PRACTICE).map(i => [i.id, 81 + Math.floor(r() * 14)])),
+    trials: [], post: {}, choices: [], drawn: null
+  };
+  document.getElementById("condChip").textContent = group + " · " + list;
+}
+function aiFor(item) {
+  if (!S.cond.ai) return null;
+  const isErr = S.cond.acc === "fallible" && ERRORS[S.list].includes(item.id);
+  const truthMisleading = item.type !== "S";
+  const saysMisleading = isErr ? !truthMisleading : truthMisleading;
+  return { saysMisleading, isErr, conf: S.conf[item.id], expl: isErr ? item.err : item.ok };
+}
+
+/* ===================== RENDER PIECES ===================== */
+function productCard(item, extra = "") {
+  const claim = item.seal ? `<span class="seal">${esc(item.claim)}</span>` : `“${esc(item.claim)}”`;
+  return `<div class="pcard" ${extra}>
+    <div class="ico" style="background:${TINT[item.icon]};color:#2a3a33">${ICONS[item.icon]}</div>
+    <div class="meta"><span class="brand">${esc(item.brand)}</span><span class="name">${esc(item.product)}</span><span class="price">${som(item.price)}</span></div>
+    <div class="claim">${claim}</div>
+    <ul>${item.details.map(d => `<li>${esc(d)}</li>`).join("")}</ul>
+  </div>`;
+}
+function verdictCard(item, ai) {
+  const badge = ai.saysMisleading ? `<span class="badge bad">Likely misleading</span>` : `<span class="badge ok">Likely substantive</span>`;
+  let body = "";
+  if (S.cond.fmt === "evidence") {
+    body = `<dl><dt>Claim assessed</dt><dd>“${esc(item.claim)}”</dd><dt>Evidence found</dt><dd>${esc(ai.expl.ev)}</dd><dt>Rule applied</dt><dd>${esc(ai.expl.rule)}</dd></dl>`;
+  }
+  return `<div class="verdict" role="note" aria-label="AI claim check"><div class="vh">AI claim check</div>${badge}<span class="conf">Confidence ${ai.conf}%</span>${body}</div>`;
+}
+function scaleButtons(name, n, sel) {
+  return `<div class="scale ${n === 7 ? "s7" : n === 10 ? "s10" : ""}" role="group" aria-label="${esc(name)}">${Array.from({ length: n }, (_, i) => `<button type="button" data-v="${i + 1}" aria-pressed="${sel === i + 1}">${i + 1}</button>`).join("")}</div>`;
+}
+
+/* ===================== SCREENS ===================== */
+function screenWelcome() {
+  $app.innerHTML = `<section class="card">
+    <h1>How do shoppers read environmental claims?</h1>
+    <p>In this study you will see 32 products in an online shop. For each one, you decide whether its environmental claim is substantive or misleading. Then you answer a few questions and make some product choices. It takes about 20 minutes.</p>
+    <p class="muted">You earn ${som(CONFIG.bonusPerCorrect)} for every correct judgment. One of your product choices may be delivered to you. Your answers are anonymous and you may stop at any time.</p>
+    <div class="field"><label for="code">Your participant code from Session 1</label><input id="code" type="text" autocomplete="off" placeholder="e.g. UZ-0142"></div>
+    <label class="check" for="consent"><input id="consent" type="checkbox"> I have read the information sheet and agree to take part.</label>
+    <button class="btn" id="go" type="button" disabled>Start</button>
+  </section>`;
+  const c = document.getElementById("consent"), go = document.getElementById("go");
+  c.addEventListener("change", () => go.disabled = !c.checked);
+  go.addEventListener("click", () => { S.code = document.getElementById("code").value.trim(); screenInstructions(); });
+}
+function screenInstructions() {
+  const aiTxt = S.cond.ai
+    ? (S.cond.fmt === "evidence"
+      ? "An AI claim check will assess each claim. It shows a verdict, its confidence and the evidence and rule it used. The final judgment is yours."
+      : "An AI claim check will assess each claim. It shows a verdict and its confidence. The final judgment is yours.")
+    : "You will judge each claim yourself.";
+  $app.innerHTML = `<section class="card">
+    <h1>What you will do</h1>
+    <p>A shopping assistant shows you one product at a time. Each product makes an environmental claim.</p>
+    <p><b>Substantive</b> claims are specific and supported. <b>Misleading</b> claims are vague, overstate what is true, or rest on weak support.</p>
+    <p>${aiTxt}</p>
+    <p class="muted">Two practice products come first. They do not count.</p>
+    <button class="btn" id="go" type="button">Start practice</button>
+  </section>`;
+  document.getElementById("go").addEventListener("click", () => runTrials(PRACTICE.map(p => p.id), true));
+}
+
+async function runTrials(ids, practice) {
+  for (let k = 0; k < ids.length; k++) {
+    await oneTrial(byId[ids[k]], k, ids.length, practice);
+  }
+  if (practice) {
+    $app.innerHTML = `<section class="card"><h1>Practice done</h1><p>The ${ITEMS.length} main products start now.</p><button class="btn" id="go" type="button">Continue</button></section>`;
+    document.getElementById("go").addEventListener("click", () => runTrials(S.order, false));
+  } else screenPost();
+}
+
+function oneTrial(item, k, n, practice) {
+  return new Promise(async resolve => {
+    const ai = aiFor(item);
+    $app.innerHTML = `<section class="phone" aria-live="polite">
+      <div class="ph-head"><span class="back" aria-hidden="true">‹</span><div><div class="ttl">Shop assistant</div><div class="sub">AI shopping assistant</div></div>
+        <span class="prog">${practice ? "Practice " : ""}${k + 1}/${n}</span></div>
+      <div class="chat" id="chat"></div>
+      <div class="ph-foot" id="foot" hidden>
+        <div class="q">Is this environmental claim substantive or misleading?</div>
+        <div class="two"><button type="button" class="opt" data-r="0" aria-pressed="false">Substantive</button><button type="button" class="opt" data-r="1" aria-pressed="false">Misleading</button></div>
+        <div class="q">How sure are you?</div>
+        ${scaleButtons("Confidence", 6, 0)}
+        <div class="ends"><span>1 guessing</span><span>6 certain</span></div>
+        <button class="btn" id="next" type="button" disabled>Next</button>
+      </div>
+    </section>`;
+    const chat = document.getElementById("chat"), foot = document.getElementById("foot");
+    const add = html => { chat.insertAdjacentHTML("beforeend", html); };
+    add(`<div class="msg user">I'm looking for ${esc(item.product.toLowerCase())}. What do you have?</div>`);
+    await sleep(CONFIG.feedbackDelay);
+    add(`<div class="who">Shop assistant</div><div class="msg ai">Here is one option from our catalogue:</div>`);
+    await sleep(CONFIG.feedbackDelay);
+    add(productCard(item));
+    if (ai) { await sleep(CONFIG.feedbackDelay); add(verdictCard(item, ai)); }
+    await sleep(200);
+    foot.hidden = false;
+    const t0 = performance.now();
+    let resp = null, conf = 0;
+    const next = document.getElementById("next");
+    const sync = () => next.disabled = !(resp !== null && conf > 0);
+    foot.querySelectorAll(".opt").forEach(b => b.addEventListener("click", () => {
+      resp = +b.dataset.r; foot.querySelectorAll(".opt").forEach(x => x.setAttribute("aria-pressed", x === b)); sync();
+    }));
+    foot.querySelectorAll(".scale button").forEach(b => b.addEventListener("click", () => {
+      conf = +b.dataset.v; foot.querySelectorAll(".scale button").forEach(x => x.setAttribute("aria-pressed", x === b)); sync();
+    }));
+    next.addEventListener("click", () => {
+      const truth = item.type === "S" ? 0 : 1;
+      S.trials.push({
+        pid: S.pid, code: S.code, group: S.group, list: S.list, ai_accuracy: S.cond.acc || "none", ai_format: S.cond.fmt || "none",
+        practice: practice ? 1 : 0, trial: k + 1, item: item.id, claim_type: item.type, misleading: truth,
+        ai_shown: ai ? 1 : 0, ai_says_misleading: ai ? (ai.saysMisleading ? 1 : 0) : "", ai_error: ai ? (ai.isErr ? 1 : 0) : "", ai_conf: ai ? ai.conf : "",
+        response_misleading: resp, correct: resp === truth ? 1 : 0, agree_ai: ai ? ((resp === 1) === ai.saysMisleading ? 1 : 0) : "",
+        confidence: conf, rt_ms: Math.round(performance.now() - t0), time: new Date().toISOString()
+      });
+      resolve();
+    }, { once: true });
+  });
+}
+
+function likert(id, text, n = 7, lo = "Completely disagree", hi = "Completely agree") {
+  return `<div class="item" data-id="${id}"><div>${esc(text)}</div>${scaleButtons(text, n, 0)}<div class="ends"><span>1 ${esc(lo)}</span><span>${n} ${esc(hi)}</span></div></div>`;
+}
+function screenPost() {
+  const items = [];
+  // Realism: Li & Wang (2023), as listed in Li & Li (2026, Appendix V); referent adapted to this task
+  items.push(["real1", "The situation in this task could exist in reality as described."]);
+  items.push(["real2", "The shopping assistant in this task could exist in reality."]);
+  items.push(["real3", "The shopping situation described in this task is realistic."]);
+  items.push(["real4", "It is very easy for me to put myself into this situation."]);
+  if (S.cond.ai) {
+    items.push(["mc_evidence", "The AI claim check showed the evidence and rule it used."]);
+    items.push(["mc_score", "The AI claim check showed only a verdict and a confidence score."]);
+  }
+  items.push(["attn", "To show you are reading, select 2 on this item."]);
+  $app.innerHTML = `<section class="card">
+    <h1>A few questions about the task</h1>
+    ${items.map(([id, t]) => likert(id, t)).join("")}
+    ${likert("difficulty", "To what extent do you think participating in this study is difficult?", 10, "not difficult at all", "very difficult")}
+    ${!S.cond.ai ? `<div class="item" data-id="mc_ai_seen"><div>Did an AI tool check the claims for you?</div><div class="two"><button type="button" class="opt" data-v="1" aria-pressed="false">Yes</button><button type="button" class="opt" data-v="0" aria-pressed="false">No</button></div></div>` : ""}
+    ${S.cond.ai ? `<p class="note">Trust in the AI verifier (Jian, Bisantz &amp; Drury, 2000; 12 items) and perceived deception (Román, 2010) go here. Insert the verified item wording from the original articles before data collection.</p>` : `<p class="note">Perceived deception items (Román, 2010) go here. Insert the verified item wording before data collection.</p>`}
+    <button class="btn" id="go" type="button" disabled>Continue</button>
+  </section>`;
+  const need = [...$app.querySelectorAll(".item")].map(el => el.dataset.id);
+  const go = document.getElementById("go");
+  $app.querySelectorAll(".item").forEach(el => {
+    el.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+      S.post[el.dataset.id] = +b.dataset.v;
+      el.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+      go.disabled = !need.every(k => S.post[k] !== undefined);
+    }));
+  });
+  go.addEventListener("click", () => screenChoice(0));
+}
+
+function screenChoice(k) {
+  if (k >= CHOICES.length) return screenDebrief();
+  const set = CHOICES.find(c => c.id === S.choiceOrder[k]);
+  const [left, right] = S.sides[set.id] ? [set.a, set.b] : [set.b, set.a];
+  const L = byId[left], R = byId[right], price = Math.max(L.price, R.price);
+  const Lp = { ...L, price }, Rp = { ...R, price };
+  $app.innerHTML = `<section class="card">
+    <h2>Choice ${k + 1} of ${CHOICES.length}</h2>
+    <p>Both cost ${som(price)}. One of your choices may be delivered to you, so choose as you would in a real shop.</p>
+    <div class="choice-grid">
+      ${productCard(Lp, `role="button" tabindex="0" data-pick="${left}" aria-pressed="false"`)}
+      ${productCard(Rp, `role="button" tabindex="0" data-pick="${right}" aria-pressed="false"`)}
+      <button type="button" class="none" data-pick="none" aria-pressed="false">I would not buy either</button>
+    </div>
+    <button class="btn" id="go" type="button" disabled>Confirm choice</button>
+  </section>`;
+  let pick = null; const t0 = performance.now(), go = document.getElementById("go");
+  const opts = [...$app.querySelectorAll("[data-pick]")];
+  const choose = el => { pick = el.dataset.pick; opts.forEach(o => o.setAttribute("aria-pressed", o === el)); go.disabled = false; };
+  opts.forEach(o => { o.addEventListener("click", () => choose(o)); o.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); choose(o); } }); });
+  go.addEventListener("click", () => {
+    const misleadingOnly = byId[set.a].type !== "S" && byId[set.b].type !== "S";
+    S.choices.push({ pid: S.pid, group: S.group, set: set.id, order: k + 1, left, right, misleading_only: misleadingOnly ? 1 : 0, chosen: pick,
+      chosen_type: pick === "none" ? "defer" : byId[pick].type, chose_substantive: pick !== "none" && byId[pick].type === "S" ? 1 : 0, rt_ms: Math.round(performance.now() - t0) });
+    screenChoice(k + 1);
+  });
+}
+
+function screenDebrief() {
+  const real = S.choices[Math.floor(Math.random() * S.choices.length)];
+  S.drawn = real.set;
+  const main = S.trials.filter(t => !t.practice);
+  const nCorrect = main.reduce((a, t) => a + t.correct, 0);
+  const rows = S.order.map(id => {
+    const it = byId[id], t = main.find(x => x.item === id), truth = it.type !== "S";
+    const err = t.ai_error === 1 ? ` <span class="pill bad">AI wrong</span>` : "";
+    return `<tr><td>${esc(it.brand)} ${esc(it.product.toLowerCase())}<br><span class="muted">“${esc(it.claim)}”</span></td>
+      <td><span class="pill ${truth ? "bad" : "ok"}">${truth ? "Misleading" : "Substantive"}</span><br><span class="muted">${TYPE_NAME[it.type]}</span>${err}</td>
+      <td>${t.correct ? "Correct" : "Not correct"}</td></tr>`;
+  }).join("");
+  $app.innerHTML = `<section class="card">
+    <h1>Thank you. Here is what the study was about.</h1>
+    <p>We are studying whether AI tools help shoppers tell supported environmental claims from misleading ones.</p>
+    ${S.cond.ai ? `<p><b>The AI claim check in this study was simulated.</b> Its verdicts were prepared in advance.${S.cond.acc === "fallible" ? " In your version it gave a wrong verdict on 8 of the 32 products on purpose. These are marked “AI wrong” below." : " In your version every verdict was correct."}</p>` : ""}
+    <p>All brands are invented. The table shows the correct answer for every product so that you leave with accurate information.</p>
+    <p>You judged <b>${nCorrect} of ${main.length}</b> correctly. Your bonus is ${som(nCorrect * CONFIG.bonusPerCorrect)}.</p>
+    <p>Choice drawn for delivery: <b>${real.chosen === "none" ? "you chose not to buy, so nothing is delivered" : esc(byId[real.chosen].brand + " " + byId[real.chosen].product.toLowerCase())}</b>.</p>
+    <p class="muted">You may withdraw your data now without losing your payment.</p>
+    <div class="row"><button class="btn" id="keep" type="button">Submit my answers</button><button class="btn ghost" id="withdraw" type="button">Withdraw my data</button></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Product and claim</th><th>Correct answer</th><th>You</th></tr></thead><tbody>${rows}</tbody></table></div>
+  </section>`;
+  document.getElementById("keep").addEventListener("click", () => finish(false));
+  document.getElementById("withdraw").addEventListener("click", () => finish(true));
+}
+
+/* ===================== DATA ===================== */
+function sdt(trials) {
+  const sig = trials.filter(t => t.misleading === 1), noi = trials.filter(t => t.misleading === 0);
+  const hits = sig.filter(t => t.response_misleading === 1).length, fa = noi.filter(t => t.response_misleading === 1).length;
+  const H = (hits + 0.5) / (sig.length + 1), F = (fa + 0.5) / (noi.length + 1); // log-linear correction (Hautus, 1995)
+  return { hits, fa, nSig: sig.length, nNoise: noi.length, H, F, d: qnorm(H) - qnorm(F), c: -(qnorm(H) + qnorm(F)) / 2 };
+}
+function toCSV(rows) {
+  if (!rows.length) return "";
+  const cols = Object.keys(rows[0]);
+  const q = v => { const s = v === null || v === undefined ? "" : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  return [cols.join(","), ...rows.map(r => cols.map(c => q(r[c])).join(","))].join("\n");
+}
+/* One wide row per participant for the Participants sheet. */
+function summaryRow(withdrawn) {
+  const main = S.trials.filter(t => !t.practice), st = sdt(main);
+  const shown = main.filter(t => t.ai_shown), errT = main.filter(t => t.ai_error === 1);
+  const row = {
+    pid: S.pid, code: S.code, group: S.group, list: S.list, ai_accuracy: S.cond.acc || "none", ai_format: S.cond.fmt || "none",
+    withdrawn: withdrawn ? 1 : 0, started: S.started, finished: new Date().toISOString(),
+    duration_sec: Math.round((Date.now() - Date.parse(S.started)) / 1000),
+    n_trials: main.length, n_correct: main.filter(t => t.correct).length,
+    hits: st.hits, false_alarms: st.fa, hit_rate: +st.H.toFixed(4), fa_rate: +st.F.toFixed(4), dprime: +st.d.toFixed(4), criterion_c: +st.c.toFixed(4),
+    ai_agree_rate: shown.length ? +(shown.filter(t => t.agree_ai === 1).length / shown.length).toFixed(4) : "",
+    ai_error_follow_rate: errT.length ? +(errT.filter(t => t.agree_ai === 1).length / errT.length).toFixed(4) : "",
+    mean_confidence: main.length ? +(main.reduce((a, t) => a + t.confidence, 0) / main.length).toFixed(3) : "",
+    median_rt_ms: main.length ? main.map(t => t.rt_ms).sort((a, b) => a - b)[Math.floor(main.length / 2)] : ""
+  };
+  ["V", "P", "L", "O"].forEach(ty => { const s = main.filter(t => t.claim_type === ty); row["caught_" + ty] = s.filter(t => t.response_misleading === 1).length; });
+  Object.entries(S.post).forEach(([k, v]) => row["post_" + k] = v);
+  S.choices.forEach(c => { row["choice_" + c.set] = c.chosen_type; });
+  row.drawn_choice = S.drawn || "";
+  row.user_agent = navigator.userAgent.slice(0, 180);
+  return row;
+}
+async function sendToServer(payload) {
+  const body = JSON.stringify(payload);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      /* text/plain keeps this a simple request, which Google Apps Script accepts without a CORS preflight. */
+      const r = await fetch(CONFIG.endpoint, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && j.ok) return true;
+    } catch { /* retry */ }
+    await new Promise(res => setTimeout(res, 1500 * (attempt + 1)));
+  }
+  return false;
+}
+async function finish(withdrawn) {
+  const summary = summaryRow(withdrawn);
+  const payload = withdrawn
+    ? { pid: S.pid, summary: { pid: S.pid, code: S.code, group: S.group, list: S.list, withdrawn: 1, finished: summary.finished }, trials: [], choices: [] }
+    : { pid: S.pid, summary, trials: S.trials, choices: S.choices };
+  let sent = "No server is set in CONFIG.endpoint, so this session was not stored.";
+  if (CONFIG.endpoint) {
+    if (!CONFIG.preview) $app.innerHTML = `<section class="card"><h1>Submitting your answers…</h1><p class="muted">Please keep this page open.</p></section>`;
+    const ok = await sendToServer(payload);
+    sent = ok ? "Saved to the Google Sheet." : "Could not reach the Google Sheet.";
+    if (!CONFIG.preview) {
+      if (ok) {
+        $app.innerHTML = `<section class="card"><h1>${withdrawn ? "Your data were withdrawn." : "Your answers are submitted. Thank you."}</h1>
+          <p>Your completion code is</p><p style="font-family:var(--font-mono);font-size:22px;font-weight:600">${esc(S.pid)}</p>
+          <p class="muted">Keep this code. You need it to receive your payment.</p></section>`;
+      } else {
+        $app.innerHTML = `<section class="card"><h1>Your answers were not sent yet</h1>
+          <p>The connection failed. Check your internet and press the button again. Your answers are kept on this page.</p>
+          <button class="btn" id="retry" type="button">Send again</button></section>`;
+        document.getElementById("retry").addEventListener("click", () => finish(withdrawn));
+      }
+      return;
+    }
+  }
+  screenResearcher(payload, sent);
+}
+function screenResearcher(payload, sent) {
+  const main = S.trials.filter(t => !t.practice);
+  const all = sdt(main);
+  const agree = main.filter(t => t.ai_shown).length ? main.filter(t => t.ai_shown && t.agree_ai === 1).length / main.filter(t => t.ai_shown).length : null;
+  const errT = main.filter(t => t.ai_error === 1);
+  const errFollow = errT.length ? errT.filter(t => t.agree_ai === 1).length / errT.length : null;
+  const byType = ["V", "P", "L", "O"].map(ty => { const s = main.filter(t => t.claim_type === ty); return `<tr><td>${TYPE_NAME[ty]}</td><td class="num">${s.filter(t => t.response_misleading === 1).length}/${s.length}</td></tr>`; }).join("");
+  const csv = toCSV(main.concat(S.trials.filter(t => t.practice)));
+  $app.innerHTML = `<section class="card">
+    <h1>Session summary</h1>
+    <p class="muted">Researcher view. Participants do not see this screen. ${esc(sent)}</p>
+    <div class="stats">
+      <div class="stat"><b>${all.d.toFixed(2)}</b><span>d′ sensitivity</span></div>
+      <div class="stat"><b>${all.c.toFixed(2)}</b><span>c criterion</span></div>
+      <div class="stat"><b>${main.filter(t => t.correct).length}/${main.length}</b><span>correct</span></div>
+      <div class="stat"><b>${all.hits}/${all.nSig}</b><span>misleading caught</span></div>
+      <div class="stat"><b>${all.fa}/${all.nNoise}</b><span>substantive rejected</span></div>
+      <div class="stat"><b>${agree === null ? "n/a" : Math.round(agree * 100) + "%"}</b><span>agreement with AI</span></div>
+    </div>
+    ${errFollow !== null ? `<p>On the ${errT.length} AI error trials the participant followed the AI ${Math.round(errFollow * 100)}% of the time.</p>` : ""}
+    <div class="tbl-wrap"><table><thead><tr><th>Misleading type</th><th>Caught</th></tr></thead><tbody>${byType}</tbody></table></div>
+    <p class="note">c is positive when the participant leans toward “substantive” and negative when they lean toward “misleading”. Rates use the log-linear correction.</p>
+    <div class="row">
+      <button class="btn" id="dlCsv" type="button" hidden>Save trials as CSV</button>
+      <button class="btn ghost" id="dlJson" type="button" hidden>Save full session as JSON</button>
+      <button class="btn ghost" id="copy" type="button">Copy JSON</button>
+    </div>
+    <span class="muted" id="dlMsg"></span>
+    <textarea class="dump" id="dump" readonly aria-label="Session data">${esc(JSON.stringify(payload, null, 1))}</textarea>
+    <button class="btn ghost" id="again" type="button">Run another session</button>
+  </section>`;
+  const msg = document.getElementById("dlMsg");
+  document.getElementById("copy").addEventListener("click", async () => {
+    const ta = document.getElementById("dump");
+    try { await navigator.clipboard.writeText(ta.value); msg.textContent = "Copied."; } catch { ta.select(); msg.textContent = "Text selected. Press Ctrl+C or Cmd+C to copy."; }
+  });
+  document.getElementById("again").addEventListener("click", () => restart());
+  (async () => {
+    const dl = window.claude?.use ? await window.claude.use("downloads") : null;
+    if (!dl) return;
+    const save = async (filename, data) => {
+      try { await dl.save({ filename, data }); msg.textContent = "Saved " + filename + "."; }
+      catch (e) { msg.textContent = e && e.code === "declined" ? "Save cancelled." : "Saving is not available here. Use Copy JSON."; }
+    };
+    const bC = document.getElementById("dlCsv"), bJ = document.getElementById("dlJson");
+    bC.hidden = false; bJ.hidden = false;
+    bC.addEventListener("click", () => save(`claimcheck_${S.pid}_trials.csv`, csv));
+    bJ.addEventListener("click", () => save(`claimcheck_${S.pid}.json`, JSON.stringify(payload, null, 1)));
+  })();
+}
+
+/* ===================== BOOT ===================== */
+function restart() {
+  newSession(document.getElementById("selGroup").value, document.getElementById("selList").value);
+  screenWelcome();
+}
+document.getElementById("btnRestart").addEventListener("click", restart);
+if (CONFIG.preview) {
+  document.getElementById("selGroup").value = "G4";
+  restart();
+} else {
+  document.getElementById("strip").hidden = true;
+  /* Ask the sheet for the least-filled group so the five groups stay close to 200 each; fall back to random. */
+  (async () => {
+    let g = null, l = null;
+    try {
+      const r = await fetch(CONFIG.endpoint + "?assign=1");
+      const j = await r.json();
+      g = j.group; l = j.list;
+    } catch { /* random fallback */ }
+    newSession(g, l);
+    screenWelcome();
+  })();
+}
+</script>
+</body></html>
