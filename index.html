@@ -108,6 +108,8 @@ button { cursor: pointer; }
 .ph-foot { border-top: 1px solid var(--line); background: var(--surface); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
 .q { font-weight: 600; font-size: 14px; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.choice-col { display: grid; grid-template-columns: 1fr; gap: 6px; }
+.choice-col .opt { text-align: left; padding: 9px 12px; font-weight: 500; }
 .opt { border: 1.5px solid var(--line); background: var(--phone); border-radius: 10px; padding: 10px 8px; font-weight: 600; font-size: 14px; }
 .opt[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
 .scale { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
@@ -169,9 +171,38 @@ textarea.dump { width: 100%; min-height: 120px; font-family: var(--font-mono); f
 const CONFIG = {
   /* Paste your Google Apps Script web app URL (ends in /exec) between the quotes. */
   endpoint: "https://script.google.com/macros/s/AKfycbxZEPMTCmY9fqPv-_Ko1HSoi7Dd9xXL1v06Ow0Db36sVZSreMaqXQMvRKDoKrtJjDCe/exec",
-  bonusPerCorrect: 500,     // so'm per correct judgment [INPUT NEEDED]
-  feedbackDelay: 450        // ms between chat messages
+  version: "v0.3-2026-10-23",  // saved in every row. Change it whenever you edit questions.
+  feedbackDelay: 450           // ms between chat messages
 };
+
+/* ===================== QUESTIONNAIRE SCALES =====================
+   Paste each item's exact wording from the original article into `items`.
+   A scale with an empty `items` list is skipped automatically, so nothing unfinished reaches respondents.
+   Format: { id: "ails1", text: "Exact item wording" }. Reverse-scored items are recoded in the analysis, not here. */
+const SCALES = [
+  { key: "ails", when: "pre", title: "Artificial intelligence", n: 7, lo: "Strongly disagree", hi: "Strongly agree",
+    source: "AI literacy: Wang, Rau & Yuan (2023), AILS, 12 items, 7-point", items: [] },
+  { key: "tprop", when: "pre", title: "Automated systems", n: 5, lo: "Strongly disagree", hi: "Strongly agree",
+    source: "Trust propensity: Körber (2019), Propensity to Trust subscale, 3 items, 5-point", items: [] },
+  { key: "skep", when: "pre", title: "Environmental claims in general", n: 7, lo: "Strongly disagree", hi: "Strongly agree",
+    source: "Skepticism toward environmental claims: Mohr, Eroğlu & Ellen (1998), 4 items [check response format]", items: [] },
+  { key: "tai", when: "post", aiOnly: true, title: "The AI claim check", n: 7, lo: "Not at all", hi: "Extremely",
+    source: "Trust in the AI verifier: Jian, Bisantz & Drury (2000), 12 items, 7-point", items: [] },
+  { key: "dec", when: "post", title: "The products you saw", n: 7, lo: "Strongly disagree", hi: "Strongly agree",
+    source: "Perceived deception: Román (2010) [check item count]", items: [] }
+];
+
+/* Objective environmental knowledge (researcher-developed draft; validate in the pretest). Answer key: 1 = true, 0 = false. */
+const KNOWLEDGE = [
+  { id: "kn1", text: "Recycled plastic is made from plastic that has already been used.", key: 1 },
+  { id: "kn2", text: "A product with third-party certification has been checked by an organisation other than the seller.", key: 1 },
+  { id: "kn3", text: "“Biodegradable” and “recyclable” mean the same thing.", key: 0 },
+  { id: "kn4", text: "Carbon offsetting means paying for projects elsewhere that reduce or absorb emissions.", key: 1 },
+  { id: "kn5", text: "An energy label class compares a product's energy use with other products of the same type.", key: 1 },
+  { id: "kn6", text: "Plant-based ingredients always make a product better for the environment.", key: 0 },
+  { id: "kn7", text: "Organic cotton is grown without synthetic pesticides and synthetic fertilisers.", key: 1 },
+  { id: "kn8", text: "If a product's packaging is recyclable, the product itself is recyclable too.", key: 0 }
+];
 /* Participant mode runs whenever an endpoint is set. Add ?preview=1 to the link to see the researcher strip. */
 const PARAMS = (() => { try { return new URLSearchParams(location.search); } catch { return new URLSearchParams(""); } })();
 CONFIG.preview = !CONFIG.endpoint || PARAMS.has("preview");
@@ -374,7 +405,8 @@ function newSession(group, list) {
   }
   const r = rng(hash(pid));
   S = {
-    pid, code: "", group, list, cond: GROUPS[group], started: new Date().toISOString(),
+    pid, code: (PARAMS.get("code") || PARAMS.get("id") || "").slice(0, 64), group, list, cond: GROUPS[group], started: new Date().toISOString(),
+    answers: {},
     order: shuffle(ITEMS.map(i => i.id), r), choiceOrder: shuffle(CHOICES.map(c => c.id), r),
     sides: Object.fromEntries(CHOICES.map(c => [c.id, r() < 0.5])),
     conf: Object.fromEntries(ITEMS.concat(PRACTICE).map(i => [i.id, 81 + Math.floor(r() * 14)])),
@@ -416,15 +448,66 @@ function scaleButtons(name, n, sel) {
 function screenWelcome() {
   $app.innerHTML = `<section class="card">
     <h1>How do shoppers read environmental claims?</h1>
-    <p>In this study you will see 32 products in an online shop. For each one, you decide whether its environmental claim is substantive or misleading. Then you answer a few questions and make some product choices. It takes about 20 minutes.</p>
-    <p class="muted">You earn ${som(CONFIG.bonusPerCorrect)} for every correct judgment. One of your product choices may be delivered to you. Your answers are anonymous and you may stop at any time.</p>
-    <div class="field"><label for="code">Your participant code from Session 1</label><input id="code" type="text" autocomplete="off" placeholder="e.g. UZ-0142"></div>
-    <label class="check" for="consent"><input id="consent" type="checkbox"> I have read the information sheet and agree to take part.</label>
+    <p>In this study you first answer a few questions about yourself. Then you see 32 products in an online shop and decide whether each product's environmental claim is substantive or misleading. At the end you make some product choices and answer a few more questions. It takes about 25 minutes.</p>
+    <p class="muted">Taking part is voluntary and unpaid. We do not ask for your name, and your answers are kept confidential and used only for research. You may stop at any time. At the end you will see how many claims you judged correctly.</p>
+    <label class="check" for="adult"><input id="adult" type="checkbox"> I am 18 years old or older.</label>
+    <label class="check" for="consent"><input id="consent" type="checkbox"> I have read this information and agree to take part.</label>
     <button class="btn" id="go" type="button" disabled>Start</button>
   </section>`;
-  const c = document.getElementById("consent"), go = document.getElementById("go");
-  c.addEventListener("change", () => go.disabled = !c.checked);
-  go.addEventListener("click", () => { S.code = document.getElementById("code").value.trim(); screenInstructions(); });
+  const c = document.getElementById("consent"), a = document.getElementById("adult"), go = document.getElementById("go");
+  const sync = () => go.disabled = !(c.checked && a.checked);
+  c.addEventListener("change", sync); a.addEventListener("change", sync);
+  go.addEventListener("click", () => screenAboutYou());
+}
+
+/* Generic question page. q: { id, text, type: "likert" | "choice", n, lo, hi, options: [{ v, label }] } */
+function questionPage(title, intro, questions, onDone) {
+  const blocks = questions.map(q => {
+    if (q.type === "choice") {
+      return `<div class="item" data-id="${q.id}"><div>${esc(q.text)}</div><div class="choice-col" role="group" aria-label="${esc(q.text)}">${q.options.map(o =>
+        `<button type="button" class="opt" data-v="${esc(o.v)}" aria-pressed="false">${esc(o.label)}</button>`).join("")}</div></div>`;
+    }
+    return likert(q.id, q.text, q.n || 7, q.lo, q.hi);
+  }).join("");
+  $app.innerHTML = `<section class="card"><h1>${esc(title)}</h1>${intro ? `<p class="muted">${esc(intro)}</p>` : ""}${blocks}
+    <button class="btn" id="go" type="button" disabled>Continue</button></section>`;
+  window.scrollTo(0, 0);
+  const go = document.getElementById("go");
+  const need = questions.map(q => q.id);
+  $app.querySelectorAll(".item").forEach(el => {
+    el.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+      const raw = b.dataset.v;
+      S.answers[el.dataset.id] = /^-?\d+$/.test(raw) ? +raw : raw;
+      el.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+      go.disabled = !need.every(k => S.answers[k] !== undefined);
+    }));
+  });
+  go.addEventListener("click", onDone);
+}
+function scaleQuestions(when) {
+  return SCALES.filter(s => s.when === when && s.items.length && (!s.aiOnly || S.cond.ai));
+}
+function runScalePages(list, k, done) {
+  if (k >= list.length) return done();
+  const s = list[k];
+  questionPage(s.title, "How much do you agree with each statement?",
+    s.items.map(it => ({ id: s.key + "_" + it.id, text: it.text, n: s.n, lo: s.lo, hi: s.hi })),
+    () => runScalePages(list, k + 1, done));
+}
+function screenAboutYou() {
+  questionPage("About you", "", [
+    { id: "age_group", text: "How old are you?", type: "choice", options: ["18–24", "25–34", "35–44", "45–54", "55 or older"].map(x => ({ v: x, label: x })) },
+    { id: "gender", text: "What is your gender?", type: "choice", options: [{ v: "female", label: "Female" }, { v: "male", label: "Male" }, { v: "no_answer", label: "Prefer not to say" }] },
+    { id: "education", text: "What is your highest completed education?", type: "choice", options: [{ v: "secondary", label: "Secondary school" }, { v: "vocational", label: "College or vocational" }, { v: "bachelor", label: "Bachelor's degree" }, { v: "master", label: "Master's degree" }, { v: "doctorate", label: "Doctorate" }] },
+    { id: "student", text: "Are you currently a student?", type: "choice", options: [{ v: 1, label: "Yes" }, { v: 0, label: "No" }] },
+    { id: "shop_online", text: "How often do you shop online?", type: "choice", options: [{ v: "never", label: "Never" }, { v: "monthly_less", label: "Less than once a month" }, { v: "monthly", label: "About once a month" }, { v: "weekly", label: "Weekly or more" }] },
+    { id: "ai_use", text: "In the past month, have you used an AI chat assistant (for example ChatGPT)?", type: "choice", options: [{ v: 1, label: "Yes" }, { v: 0, label: "No" }] }
+  ], () => runScalePages(scaleQuestions("pre"), 0, screenKnowledge));
+}
+function screenKnowledge() {
+  questionPage("What do you know?", "Is each statement true or false? If you are not sure, choose “Don't know”. Please do not look anything up.",
+    KNOWLEDGE.map(k => ({ id: k.id, text: k.text, type: "choice", options: [{ v: 1, label: "True" }, { v: 0, label: "False" }, { v: "dk", label: "Don't know" }] })),
+    () => screenInstructions());
 }
 function screenInstructions() {
   const aiTxt = S.cond.ai
@@ -493,7 +576,7 @@ function oneTrial(item, k, n, practice) {
       const truth = item.type === "S" ? 0 : 1;
       S.trials.push({
         pid: S.pid, code: S.code, group: S.group, list: S.list, ai_accuracy: S.cond.acc || "none", ai_format: S.cond.fmt || "none",
-        practice: practice ? 1 : 0, trial: k + 1, item: item.id, claim_type: item.type, misleading: truth,
+        version: CONFIG.version, practice: practice ? 1 : 0, trial: k + 1, item: item.id, claim_type: item.type, misleading: truth,
         ai_shown: ai ? 1 : 0, ai_says_misleading: ai ? (ai.saysMisleading ? 1 : 0) : "", ai_error: ai ? (ai.isErr ? 1 : 0) : "", ai_conf: ai ? ai.conf : "",
         response_misleading: resp, correct: resp === truth ? 1 : 0, agree_ai: ai ? ((resp === 1) === ai.saysMisleading ? 1 : 0) : "",
         confidence: conf, rt_ms: Math.round(performance.now() - t0), time: new Date().toISOString()
@@ -507,35 +590,22 @@ function likert(id, text, n = 7, lo = "Completely disagree", hi = "Completely ag
   return `<div class="item" data-id="${id}"><div>${esc(text)}</div>${scaleButtons(text, n, 0)}<div class="ends"><span>1 ${esc(lo)}</span><span>${n} ${esc(hi)}</span></div></div>`;
 }
 function screenPost() {
-  const items = [];
   // Realism: Li & Wang (2023), as listed in Li & Li (2026, Appendix V); referent adapted to this task
-  items.push(["real1", "The situation in this task could exist in reality as described."]);
-  items.push(["real2", "The shopping assistant in this task could exist in reality."]);
-  items.push(["real3", "The shopping situation described in this task is realistic."]);
-  items.push(["real4", "It is very easy for me to put myself into this situation."]);
+  const qs = [
+    { id: "real1", text: "The situation in this task could exist in reality as described." },
+    { id: "real2", text: "The shopping assistant in this task could exist in reality." },
+    { id: "real3", text: "The shopping situation described in this task is realistic." },
+    { id: "real4", text: "It is very easy for me to put myself into this situation." }
+  ];
   if (S.cond.ai) {
-    items.push(["mc_evidence", "The AI claim check showed the evidence and rule it used."]);
-    items.push(["mc_score", "The AI claim check showed only a verdict and a confidence score."]);
+    qs.push({ id: "mc_evidence", text: "The AI claim check showed the evidence and rule it used." });
+    qs.push({ id: "mc_score", text: "The AI claim check showed only a verdict and a confidence score." });
+  } else {
+    qs.push({ id: "mc_ai_seen", text: "Did an AI tool check the claims for you?", type: "choice", options: [{ v: 1, label: "Yes" }, { v: 0, label: "No" }] });
   }
-  items.push(["attn", "To show you are reading, select 2 on this item."]);
-  $app.innerHTML = `<section class="card">
-    <h1>A few questions about the task</h1>
-    ${items.map(([id, t]) => likert(id, t)).join("")}
-    ${likert("difficulty", "To what extent do you think participating in this study is difficult?", 10, "not difficult at all", "very difficult")}
-    ${!S.cond.ai ? `<div class="item" data-id="mc_ai_seen"><div>Did an AI tool check the claims for you?</div><div class="two"><button type="button" class="opt" data-v="1" aria-pressed="false">Yes</button><button type="button" class="opt" data-v="0" aria-pressed="false">No</button></div></div>` : ""}
-    ${S.cond.ai ? `<p class="note">Trust in the AI verifier (Jian, Bisantz &amp; Drury, 2000; 12 items) and perceived deception (Román, 2010) go here. Insert the verified item wording from the original articles before data collection.</p>` : `<p class="note">Perceived deception items (Román, 2010) go here. Insert the verified item wording before data collection.</p>`}
-    <button class="btn" id="go" type="button" disabled>Continue</button>
-  </section>`;
-  const need = [...$app.querySelectorAll(".item")].map(el => el.dataset.id);
-  const go = document.getElementById("go");
-  $app.querySelectorAll(".item").forEach(el => {
-    el.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
-      S.post[el.dataset.id] = +b.dataset.v;
-      el.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
-      go.disabled = !need.every(k => S.post[k] !== undefined);
-    }));
-  });
-  go.addEventListener("click", () => screenChoice(0));
+  qs.push({ id: "attn", text: "To show you are reading carefully, select 2 on this item." });
+  qs.push({ id: "difficulty", text: "How difficult was this study for you?", n: 10, lo: "not difficult at all", hi: "very difficult" });
+  questionPage("A few questions about the task", "", qs, () => runScalePages(scaleQuestions("post"), 0, () => screenChoice(0)));
 }
 
 function screenChoice(k) {
@@ -546,7 +616,7 @@ function screenChoice(k) {
   const Lp = { ...L, price }, Rp = { ...R, price };
   $app.innerHTML = `<section class="card">
     <h2>Choice ${k + 1} of ${CHOICES.length}</h2>
-    <p>Both cost ${som(price)}. One of your choices may be delivered to you, so choose as you would in a real shop.</p>
+    <p>Imagine you are buying this today. Both cost ${som(price)}. Which one would you buy? Choose as you would in a real shop.</p>
     <div class="choice-grid">
       ${productCard(Lp, `role="button" tabindex="0" data-pick="${left}" aria-pressed="false"`)}
       ${productCard(Rp, `role="button" tabindex="0" data-pick="${right}" aria-pressed="false"`)}
@@ -560,15 +630,13 @@ function screenChoice(k) {
   opts.forEach(o => { o.addEventListener("click", () => choose(o)); o.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); choose(o); } }); });
   go.addEventListener("click", () => {
     const misleadingOnly = byId[set.a].type !== "S" && byId[set.b].type !== "S";
-    S.choices.push({ pid: S.pid, group: S.group, set: set.id, order: k + 1, left, right, misleading_only: misleadingOnly ? 1 : 0, chosen: pick,
+    S.choices.push({ pid: S.pid, version: CONFIG.version, group: S.group, set: set.id, order: k + 1, left, right, misleading_only: misleadingOnly ? 1 : 0, chosen: pick,
       chosen_type: pick === "none" ? "defer" : byId[pick].type, chose_substantive: pick !== "none" && byId[pick].type === "S" ? 1 : 0, rt_ms: Math.round(performance.now() - t0) });
     screenChoice(k + 1);
   });
 }
 
 function screenDebrief() {
-  const real = S.choices[Math.floor(Math.random() * S.choices.length)];
-  S.drawn = real.set;
   const main = S.trials.filter(t => !t.practice);
   const nCorrect = main.reduce((a, t) => a + t.correct, 0);
   const rows = S.order.map(id => {
@@ -583,9 +651,8 @@ function screenDebrief() {
     <p>We are studying whether AI tools help shoppers tell supported environmental claims from misleading ones.</p>
     ${S.cond.ai ? `<p><b>The AI claim check in this study was simulated.</b> Its verdicts were prepared in advance.${S.cond.acc === "fallible" ? " In your version it gave a wrong verdict on 8 of the 32 products on purpose. These are marked “AI wrong” below." : " In your version every verdict was correct."}</p>` : ""}
     <p>All brands are invented. The table shows the correct answer for every product so that you leave with accurate information.</p>
-    <p>You judged <b>${nCorrect} of ${main.length}</b> correctly. Your bonus is ${som(nCorrect * CONFIG.bonusPerCorrect)}.</p>
-    <p>Choice drawn for delivery: <b>${real.chosen === "none" ? "you chose not to buy, so nothing is delivered" : esc(byId[real.chosen].brand + " " + byId[real.chosen].product.toLowerCase())}</b>.</p>
-    <p class="muted">You may withdraw your data now without losing your payment.</p>
+    <p>You judged <b>${nCorrect} of ${main.length}</b> claims correctly.</p>
+    <p class="muted">Your answers are not saved until you press “Submit my answers”. If you prefer, you can withdraw your data now.</p>
     <div class="row"><button class="btn" id="keep" type="button">Submit my answers</button><button class="btn ghost" id="withdraw" type="button">Withdraw my data</button></div>
     <div class="tbl-wrap"><table><thead><tr><th>Product and claim</th><th>Correct answer</th><th>You</th></tr></thead><tbody>${rows}</tbody></table></div>
   </section>`;
@@ -622,9 +689,12 @@ function summaryRow(withdrawn) {
     median_rt_ms: main.length ? main.map(t => t.rt_ms).sort((a, b) => a - b)[Math.floor(main.length / 2)] : ""
   };
   ["V", "P", "L", "O"].forEach(ty => { const s = main.filter(t => t.claim_type === ty); row["caught_" + ty] = s.filter(t => t.response_misleading === 1).length; });
-  Object.entries(S.post).forEach(([k, v]) => row["post_" + k] = v);
+  row.version = CONFIG.version;
+  row.knowledge_score = KNOWLEDGE.filter(k => S.answers[k.id] === k.key).length;
+  Object.entries(S.answers).forEach(([k, v]) => row["q_" + k] = v);
   S.choices.forEach(c => { row["choice_" + c.set] = c.chosen_type; });
-  row.drawn_choice = S.drawn || "";
+  row.substantive_choices = S.choices.filter(c => c.chose_substantive === 1).length;
+  row.defer_misleading_only = S.choices.filter(c => c.misleading_only === 1 && c.chosen === "none").length;
   row.user_agent = navigator.userAgent.slice(0, 180);
   return row;
 }
@@ -644,7 +714,7 @@ async function sendToServer(payload) {
 async function finish(withdrawn) {
   const summary = summaryRow(withdrawn);
   const payload = withdrawn
-    ? { pid: S.pid, summary: { pid: S.pid, code: S.code, group: S.group, list: S.list, withdrawn: 1, finished: summary.finished }, trials: [], choices: [] }
+    ? { pid: S.pid, summary: { pid: S.pid, code: S.code, group: S.group, list: S.list, withdrawn: 1, finished: summary.finished, version: CONFIG.version }, trials: [], choices: [] }
     : { pid: S.pid, summary, trials: S.trials, choices: S.choices };
   let sent = "No server is set in CONFIG.endpoint, so this session was not stored.";
   if (CONFIG.endpoint) {
@@ -653,9 +723,10 @@ async function finish(withdrawn) {
     sent = ok ? "Saved to the Google Sheet." : "Could not reach the Google Sheet.";
     if (!CONFIG.preview) {
       if (ok) {
+        try { localStorage.setItem("ccl_done", CONFIG.version); } catch { /* storage blocked */ }
         $app.innerHTML = `<section class="card"><h1>${withdrawn ? "Your data were withdrawn." : "Your answers are submitted. Thank you."}</h1>
           <p>Your completion code is</p><p style="font-family:var(--font-mono);font-size:22px;font-weight:600">${esc(S.pid)}</p>
-          <p class="muted">Keep this code. You need it to receive your payment.</p></section>`;
+          <p class="muted">You can close this page. If a panel asks for a completion code, enter this one.</p></section>`;
       } else {
         $app.innerHTML = `<section class="card"><h1>Your answers were not sent yet</h1>
           <p>The connection failed. Check your internet and press the button again. Your answers are kept on this page.</p>
@@ -724,9 +795,17 @@ function restart() {
   screenWelcome();
 }
 document.getElementById("btnRestart").addEventListener("click", restart);
+const missing = SCALES.filter(s => !s.items.length).map(s => s.key);
+let already = null;
+try { already = localStorage.getItem("ccl_done"); } catch { /* storage blocked */ }
 if (CONFIG.preview) {
+  if (missing.length) document.getElementById("condChip").insertAdjacentHTML("beforebegin",
+    `<span title="${esc(SCALES.filter(s => !s.items.length).map(s => s.source).join("\n"))}">Scales without items (skipped): ${esc(missing.join(", "))}</span>`);
   document.getElementById("selGroup").value = "G4";
   restart();
+} else if (already && !PARAMS.has("retake")) {
+  document.getElementById("strip").hidden = true;
+  $app.innerHTML = `<section class="card"><h1>You have already taken part</h1><p>Thank you. Each person can take part once.</p></section>`;
 } else {
   document.getElementById("strip").hidden = true;
   /* Ask the sheet for the least-filled group so the five groups stay close to 200 each; fall back to random. */
